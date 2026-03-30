@@ -45,6 +45,12 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     return NO_A3_WEEKDAYS.includes(getWeekday(day))
   }
 
+  // Helper: count how many in a shift rest on a given day index
+  const MAX_REST_PER_SHIFT = 2
+  function countResting(shift, dayIdx) {
+    return shift.filter(n => grid[n][dayIdx] === ASSIGNMENTS.L).length
+  }
+
   // ====== PASO 1: Colocar RAM ======
   const sortedRamDays = [...ramDays].sort((a, b) => a - b)
 
@@ -54,9 +60,14 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
 
     for (const shift of [morningShift, nightShift]) {
       // Find candidates: available on RAM day AND on previous day (for L)
+      // Also check that placing L on prevIdx won't exceed max rest per shift
       const candidates = shift.filter(name => {
         if (grid[name][dayIdx] !== null) return false
-        if (prevIdx !== null && grid[name][prevIdx] !== null && grid[name][prevIdx] !== ASSIGNMENTS.L) return false
+        if (prevIdx !== null) {
+          if (grid[name][prevIdx] !== null && grid[name][prevIdx] !== ASSIGNMENTS.L) return false
+          // If prev day already has max resting and this person isn't already resting there, skip
+          if (grid[name][prevIdx] !== ASSIGNMENTS.L && countResting(shift, prevIdx) >= MAX_REST_PER_SHIFT) return false
+        }
         return true
       })
 
@@ -131,8 +142,24 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
 
         if (consecutiveWork >= 6) {
           // Must rest now (worked 5, this would be 6th)
-          grid[name][d] = ASSIGNMENTS.L
-          consecutiveWork = 0
+          // Check max rest per shift on this day
+          if (countResting(shift, d) < MAX_REST_PER_SHIFT) {
+            grid[name][d] = ASSIGNMENTS.L
+            consecutiveWork = 0
+          } else {
+            // Try next available day
+            for (let search = d + 1; search < daysInMonth; search++) {
+              if (grid[name][search] === null && countResting(shift, search) < MAX_REST_PER_SHIFT) {
+                grid[name][search] = ASSIGNMENTS.L
+                consecutiveWork = 0
+                break
+              }
+              if (grid[name][search] === ASSIGNMENTS.L) {
+                consecutiveWork = 0
+                break
+              }
+            }
+          }
         }
       }
     }
@@ -164,8 +191,7 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
           // Place extra rest to maintain stagger pattern
           if (consecutiveWork >= 5 && grid[name][d] === null) {
             // Check if not too many people resting this day in same shift
-            const restingToday = shift.filter(n => grid[n][d] === ASSIGNMENTS.L).length
-            if (restingToday <= 1) {
+            if (countResting(shift, d) < MAX_REST_PER_SHIFT) {
               grid[name][d] = ASSIGNMENTS.L
               consecutiveWork = 0
               lCounts[name]++
@@ -185,8 +211,23 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
         } else {
           consecutive++
           if (consecutive > 5 && grid[name][d] === null) {
-            grid[name][d] = ASSIGNMENTS.L
-            consecutive = 0
+            if (countResting(shift, d) < MAX_REST_PER_SHIFT) {
+              grid[name][d] = ASSIGNMENTS.L
+              consecutive = 0
+            } else {
+              // Find next available day respecting max rest limit
+              for (let search = d + 1; search < daysInMonth; search++) {
+                if (grid[name][search] === null && countResting(shift, search) < MAX_REST_PER_SHIFT) {
+                  grid[name][search] = ASSIGNMENTS.L
+                  consecutive = 0
+                  break
+                }
+                if (grid[name][search] === ASSIGNMENTS.L) {
+                  consecutive = 0
+                  break
+                }
+              }
+            }
           }
         }
       }
@@ -324,7 +365,20 @@ function validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekd
     }
   }
 
-  // 6. Uneven rest days within shift
+  // 6. More than 2 resting on same day per shift
+  for (let d = 0; d < daysInMonth; d++) {
+    for (const [label, shift] of [['Mañana', morningShift], ['Noche', nightShift]]) {
+      const restCount = shift.filter(name => grid[name][d] === ASSIGNMENTS.L).length
+      if (restCount > 2) {
+        warnings.push({
+          type: 'error',
+          message: `Turno ${label} día ${d + 1}: ${restCount} técnicos descansando (máximo 2)`,
+        })
+      }
+    }
+  }
+
+  // 7. Uneven rest days within shift
   for (const [label, shift] of [['Mañana', morningShift], ['Noche', nightShift]]) {
     const lCounts = shift.map(name => grid[name].filter(v => v === ASSIGNMENTS.L).length)
     const maxL = Math.max(...lCounts)
@@ -337,7 +391,7 @@ function validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekd
     }
   }
 
-  // 7. Uneven RAM distribution within shift
+  // 8. Uneven RAM distribution within shift
   for (const [label, shift] of [['Mañana', morningShift], ['Noche', nightShift]]) {
     const ramCounts = shift.map(name => grid[name].filter(v => v === ASSIGNMENTS.RAM).length)
     const maxR = Math.max(...ramCounts)
