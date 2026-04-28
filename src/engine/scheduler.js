@@ -128,25 +128,100 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
     return dayIdx + 1 < daysInMonth && grid[name][dayIdx + 1] === ASSIGNMENTS.RAM
   }
 
+  function isLowWorkday(dayIdx) {
+    const weekday = getWeekday(dayIdx + 1)
+    return weekday === 1 || weekday === 5
+  }
+
+  function restCountFor(name) {
+    return grid[name].filter(v => v === ASSIGNMENTS.L).length
+  }
+
+  function getRestAdditionOrder(shift) {
+    const days = Array.from({ length: daysInMonth }, (_, idx) => idx)
+
+    return [
+      ...days.filter(dayIdx => isLowWorkday(dayIdx) && countResting(shift, dayIdx) === 0),
+      ...days.filter(dayIdx => !isLowWorkday(dayIdx)),
+      ...days.filter(dayIdx => isLowWorkday(dayIdx) && countResting(shift, dayIdx) > 0),
+    ]
+  }
+
+  function getRestRemovalOrder() {
+    const days = Array.from({ length: daysInMonth }, (_, idx) => daysInMonth - 1 - idx)
+
+    return [
+      ...days.filter(dayIdx => !isLowWorkday(dayIdx)),
+      ...days.filter(dayIdx => isLowWorkday(dayIdx)),
+    ]
+  }
+
+  function canRemoveRest(name, dayIdx) {
+    if (grid[name][dayIdx] !== ASSIGNMENTS.L || isRamRest(name, dayIdx)) return false
+
+    grid[name][dayIdx] = null
+    const canRemove = !hasTooLongWorkStreak(name)
+    grid[name][dayIdx] = ASSIGNMENTS.L
+
+    return canRemove
+  }
+
+  function normalizeLowWorkdayRests(shift) {
+    for (let d = 0; d < daysInMonth; d++) {
+      if (!isLowWorkday(d)) continue
+
+      while (countResting(shift, d) > 1) {
+        const removable = shift
+          .filter(name => canRemoveRest(name, d))
+          .sort((a, b) => {
+            const diff = restCountFor(b) - restCountFor(a)
+            if (diff !== 0) return diff
+            return shift.indexOf(a) - shift.indexOf(b)
+          })
+
+        if (removable.length === 0) break
+        grid[removable[0]][d] = null
+      }
+
+      if (countResting(shift, d) === 0) {
+        const candidates = shift
+          .filter(name => grid[name][d] === null)
+          .sort((a, b) => {
+            const aAdjacentRest = grid[a][d - 1] === ASSIGNMENTS.L || grid[a][d + 1] === ASSIGNMENTS.L
+            const bAdjacentRest = grid[b][d - 1] === ASSIGNMENTS.L || grid[b][d + 1] === ASSIGNMENTS.L
+            if (aAdjacentRest !== bAdjacentRest) return Number(aAdjacentRest) - Number(bAdjacentRest)
+
+            const diff = restCountFor(a) - restCountFor(b)
+            if (diff !== 0) return diff
+            return shift.indexOf(a) - shift.indexOf(b)
+          })
+
+        if (candidates.length > 0) {
+          placeRest(candidates[0], shift, d)
+        }
+      }
+    }
+  }
+
   function balanceRestDays(shift) {
     let changed = true
 
     while (changed) {
       changed = false
       const sortedByRest = [...shift].sort((a, b) => {
-        const diff = grid[b].filter(v => v === ASSIGNMENTS.L).length - grid[a].filter(v => v === ASSIGNMENTS.L).length
+        const diff = restCountFor(b) - restCountFor(a)
         if (diff !== 0) return diff
         return shift.indexOf(a) - shift.indexOf(b)
       })
-      const maxRest = grid[sortedByRest[0]].filter(v => v === ASSIGNMENTS.L).length
-      const minRest = grid[sortedByRest[sortedByRest.length - 1]].filter(v => v === ASSIGNMENTS.L).length
+      const maxRest = restCountFor(sortedByRest[0])
+      const minRest = restCountFor(sortedByRest[sortedByRest.length - 1])
 
       if (maxRest - minRest <= 1) return
 
       for (const name of sortedByRest) {
-        if (grid[name].filter(v => v === ASSIGNMENTS.L).length <= minRest + 1) continue
+        if (restCountFor(name) <= minRest + 1) continue
 
-        for (let d = daysInMonth - 1; d >= 0; d--) {
+        for (const d of getRestRemovalOrder()) {
           if (grid[name][d] !== ASSIGNMENTS.L || isRamRest(name, d)) continue
 
           grid[name][d] = null
@@ -163,15 +238,15 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
       if (changed) continue
 
       const lowestRest = [...shift].sort((a, b) => {
-        const diff = grid[a].filter(v => v === ASSIGNMENTS.L).length - grid[b].filter(v => v === ASSIGNMENTS.L).length
+        const diff = restCountFor(a) - restCountFor(b)
         if (diff !== 0) return diff
         return shift.indexOf(a) - shift.indexOf(b)
       })
 
       for (const name of lowestRest) {
-        if (grid[name].filter(v => v === ASSIGNMENTS.L).length > minRest) continue
+        if (restCountFor(name) > minRest) continue
 
-        for (let d = 0; d < daysInMonth; d++) {
+        for (const d of getRestAdditionOrder(shift)) {
           if (placeRest(name, shift, d)) {
             changed = true
             break
@@ -298,6 +373,19 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
       }
     }
 
+    balanceRestDays(shift)
+    normalizeLowWorkdayRests(shift)
+    balanceRestDays(shift)
+
+    repaired = true
+    while (repaired) {
+      repaired = false
+      for (const name of shift) {
+        repaired = enforceMaxConsecutiveWork(name, shift) || repaired
+      }
+    }
+
+    normalizeLowWorkdayRests(shift)
     balanceRestDays(shift)
   }
 
