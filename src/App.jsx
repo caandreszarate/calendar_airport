@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import ConfigPanel from './components/ConfigPanel'
 import ScheduleGrid from './components/ScheduleGrid'
 import Legend from './components/Legend'
@@ -6,7 +6,14 @@ import StatsTable from './components/StatsTable'
 import ValidationList from './components/ValidationList'
 import { generateSchedule, computeStats } from './engine/scheduler'
 import { exportToExcel } from './engine/excelExport'
-import { DEFAULT_MORNING_SHIFT, DEFAULT_NIGHT_SHIFT } from './engine/constants'
+import {
+  DEFAULT_MORNING_SHIFT,
+  DEFAULT_NIGHT_SHIFT,
+  DEFAULT_RAM_ROTATION,
+  INITIAL_RAM_CONTINUITY,
+} from './engine/constants'
+
+const RAM_CONTINUITY_STORAGE_KEY = 'calendarAirport.ramContinuity'
 
 function parseDays(str) {
   return str
@@ -15,8 +22,34 @@ function parseDays(str) {
     .filter(n => !isNaN(n) && n > 0)
 }
 
+function getMonthKey(year, month) {
+  return `${year}-${month}`
+}
+
+function getPreviousMonth(year, month) {
+  if (month === 0) return { year: year - 1, month: 11 }
+  return { year, month: month - 1 }
+}
+
+function getPreviousRamContinuity(continuity, year, month) {
+  const previous = getPreviousMonth(year, month)
+  return continuity[getMonthKey(previous.year, previous.month)] || { morning: '', night: '' }
+}
+
+function loadRamContinuity() {
+  try {
+    const stored = window.localStorage.getItem(RAM_CONTINUITY_STORAGE_KEY)
+    if (!stored) return INITIAL_RAM_CONTINUITY
+    return { ...INITIAL_RAM_CONTINUITY, ...JSON.parse(stored) }
+  } catch {
+    return INITIAL_RAM_CONTINUITY
+  }
+}
+
 export default function App() {
   const now = new Date()
+  const [ramContinuity, setRamContinuity] = useState(loadRamContinuity)
+  const initialPreviousRam = getPreviousRamContinuity(ramContinuity, now.getFullYear(), now.getMonth())
 
   const [config, setConfig] = useState({
     month: now.getMonth(),
@@ -25,10 +58,36 @@ export default function App() {
     peDaysStr: '3, 10, 17, 24',
     morningShift: [...DEFAULT_MORNING_SHIFT],
     nightShift: [...DEFAULT_NIGHT_SHIFT],
+    morningRamOrder: [...DEFAULT_RAM_ROTATION.morning],
+    nightRamOrder: [...DEFAULT_RAM_ROTATION.night],
+    lastMorningRam: initialPreviousRam.morning,
+    lastNightRam: initialPreviousRam.night,
   })
 
   const [schedule, setSchedule] = useState(null)
   const [stats, setStats] = useState(null)
+
+  useEffect(() => {
+    window.localStorage.setItem(RAM_CONTINUITY_STORAGE_KEY, JSON.stringify(ramContinuity))
+  }, [ramContinuity])
+
+  const handleConfigChange = useCallback((nextConfig) => {
+    const monthChanged = nextConfig.month !== config.month || nextConfig.year !== config.year
+
+    if (monthChanged) {
+      const previousRam = getPreviousRamContinuity(ramContinuity, nextConfig.year, nextConfig.month)
+      setConfig({
+        ...nextConfig,
+        lastMorningRam: previousRam.morning,
+        lastNightRam: previousRam.night,
+      })
+      setSchedule(null)
+      setStats(null)
+      return
+    }
+
+    setConfig(nextConfig)
+  }, [config.month, config.year, ramContinuity])
 
   const handleGenerate = useCallback(() => {
     const ramDays = parseDays(config.ramDaysStr)
@@ -41,9 +100,25 @@ export default function App() {
       return
     }
 
-    const result = generateSchedule(config.year, config.month, ramDays, peDays, morning, night)
+    const result = generateSchedule(config.year, config.month, ramDays, peDays, morning, night, {
+      lastRam: {
+        morning: config.lastMorningRam,
+        night: config.lastNightRam,
+      },
+      ramRotation: {
+        morning: config.morningRamOrder,
+        night: config.nightRamOrder,
+      },
+    })
     setSchedule(result)
     setStats(computeStats(result.grid, result.daysInMonth))
+
+    if (result.lastRamByShift.morning || result.lastRamByShift.night) {
+      setRamContinuity(prev => ({
+        ...prev,
+        [getMonthKey(config.year, config.month)]: result.lastRamByShift,
+      }))
+    }
   }, [config])
 
   const handleCellChange = useCallback((name, dayIdx, value) => {
@@ -72,7 +147,7 @@ export default function App() {
       </header>
 
       <main className="max-w-[98vw] mx-auto px-4 py-6">
-        <ConfigPanel config={config} onConfigChange={setConfig} onGenerate={handleGenerate} />
+        <ConfigPanel config={config} onConfigChange={handleConfigChange} onGenerate={handleGenerate} />
 
         {schedule && (
           <>

@@ -9,9 +9,10 @@ import { ASSIGNMENTS, NO_A3_WEEKDAYS } from './constants'
  * @param {number[]} peDays - días del mes con vuelo PE (1-based)
  * @param {string[]} morningShift - nombres turno mañana
  * @param {string[]} nightShift - nombres turno noche
- * @returns {{ grid: Object, warnings: Array }}
+ * @param {{ lastRam?: Object, ramRotation?: Object }} options
+ * @returns {{ grid: Object, warnings: Array, lastRamByShift: Object }}
  */
-export function generateSchedule(year, month, ramDays, peDays, morningShift, nightShift) {
+export function generateSchedule(year, month, ramDays, peDays, morningShift, nightShift, options = {}) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
   // grid[name][dayIndex] = assignment code (0-indexed day)
@@ -191,6 +192,46 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     }
   }
 
+  function normalizeRamRotation(shift, configuredOrder = []) {
+    const namesInShift = new Set(shift)
+    const rotation = configuredOrder.filter(name => namesInShift.has(name))
+
+    for (const name of shift) {
+      if (!rotation.includes(name)) rotation.push(name)
+    }
+
+    return rotation
+  }
+
+  function sortByRamRotation(candidates, rotation, lastName) {
+    const cursor = rotation.indexOf(lastName)
+
+    return [...candidates].sort((a, b) => {
+      const aIndex = rotation.indexOf(a)
+      const bIndex = rotation.indexOf(b)
+      const aDistance = aIndex === -1 ? Infinity : cursor === -1 ? aIndex : (aIndex - cursor - 1 + rotation.length) % rotation.length
+      const bDistance = bIndex === -1 ? Infinity : cursor === -1 ? bIndex : (bIndex - cursor - 1 + rotation.length) % rotation.length
+
+      if (aDistance !== bDistance) return aDistance - bDistance
+      return candidates.indexOf(a) - candidates.indexOf(b)
+    })
+  }
+
+  const ramShiftConfigs = [
+    {
+      key: 'morning',
+      staff: morningShift,
+      rotation: normalizeRamRotation(morningShift, options.ramRotation?.morning),
+      lastRamName: options.lastRam?.morning || null,
+    },
+    {
+      key: 'night',
+      staff: nightShift,
+      rotation: normalizeRamRotation(nightShift, options.ramRotation?.night),
+      lastRamName: options.lastRam?.night || null,
+    },
+  ]
+
   // ====== PASO 1: Colocar RAM ======
   const sortedRamDays = [...ramDays].sort((a, b) => a - b)
 
@@ -198,7 +239,8 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     const dayIdx = day - 1
     const prevIdx = day > 1 ? day - 2 : null
 
-    for (const shift of [morningShift, nightShift]) {
+    for (const shiftConfig of ramShiftConfigs) {
+      const { staff: shift, rotation } = shiftConfig
       // Find candidates: available on RAM day AND on previous day (for L)
       // Also check that placing L on prevIdx won't exceed max rest per shift
       const candidates = shift.filter(name => {
@@ -211,17 +253,13 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
         return true
       })
 
-      // Sort by last RAM (oldest first), then by list order for tiebreaker
-      candidates.sort((a, b) => {
-        const diff = lastRam[a] - lastRam[b]
-        if (diff !== 0) return diff
-        return shift.indexOf(a) - shift.indexOf(b)
-      })
+      const sortedCandidates = sortByRamRotation(candidates, rotation, shiftConfig.lastRamName)
 
-      if (candidates.length > 0) {
-        const chosen = candidates[0]
+      if (sortedCandidates.length > 0) {
+        const chosen = sortedCandidates[0]
         grid[chosen][dayIdx] = ASSIGNMENTS.RAM
         lastRam[chosen] = dayIdx
+        shiftConfig.lastRamName = chosen
 
         // Force L on previous day
         if (prevIdx !== null) {
@@ -339,8 +377,12 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
 
   // ====== PASO 5: Validar ======
   const warnings = validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekday)
+  const lastRamByShift = {
+    morning: ramShiftConfigs.find(config => config.key === 'morning')?.lastRamName || null,
+    night: ramShiftConfigs.find(config => config.key === 'night')?.lastRamName || null,
+  }
 
-  return { grid, warnings, daysInMonth }
+  return { grid, warnings, daysInMonth, lastRamByShift }
 }
 
 function validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekday) {

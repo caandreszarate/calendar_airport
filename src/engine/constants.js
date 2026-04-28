@@ -37,5 +37,17 @@ export const DEFAULT_NIGHT_SHIFT = [
   'Petronila',
 ]
 
+export const DEFAULT_RAM_ROTATION = {
+  morning: ['Melania NFA', 'Alberto', 'Silvia', 'Teodora', 'Sofía', 'Karina'],
+  night: ['Priscila', 'Juan', 'Lorenzo', 'Vicente', 'Husein', 'Petronila'],
+}
+
+export const INITIAL_RAM_CONTINUITY = {
+  '2026-3': {
+    morning: 'Teodora',
+    night: 'Vicente',
+  },
+}
+
 // Días donde NO se atiende A3: lunes (1), jueves (4), sábado (6)
 export const NO_A3_WEEKDAYS = [1, 4, 6]

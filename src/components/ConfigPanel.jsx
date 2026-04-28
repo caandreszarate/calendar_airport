@@ -24,6 +24,11 @@ export default function ConfigPanel({ config, onConfigChange, onGenerate }) {
     onConfigChange({ ...config, peDaysStr: e.target.value })
   }
 
+  const handleLastRamChange = (shift, value) => {
+    const key = shift === 'morning' ? 'lastMorningRam' : 'lastNightRam'
+    onConfigChange({ ...config, [key]: value })
+  }
+
   const handleStaffChange = (shift, index, value) => {
     const key = shift === 'morning' ? 'morningShift' : 'nightShift'
     const updated = [...config[key]]
@@ -96,6 +101,36 @@ export default function ConfigPanel({ config, onConfigChange, onGenerate }) {
             placeholder="3, 10, 17, 24"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 border-t pt-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Último RAM mañana</label>
+          <select
+            value={config.lastMorningRam}
+            onChange={(e) => handleLastRamChange('morning', e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Sin dato previo</option>
+            {config.morningShift.filter(name => name.trim()).map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Último RAM noche</label>
+          <select
+            value={config.lastNightRam}
+            onChange={(e) => handleLastRamChange('night', e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Sin dato previo</option>
+            {config.nightShift.filter(name => name.trim()).map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
