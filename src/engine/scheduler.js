@@ -51,6 +51,146 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     return shift.filter(n => grid[n][dayIdx] === ASSIGNMENTS.L).length
   }
 
+  function sortByCount(names, area) {
+    return [...names].sort((a, b) => {
+      const diff = areaCounts[a][area] - areaCounts[b][area]
+      if (diff !== 0) return diff
+      return names.indexOf(a) - names.indexOf(b)
+    })
+  }
+
+  function placeRest(name, shift, dayIdx) {
+    if (dayIdx < 0 || dayIdx >= daysInMonth) return false
+    if (grid[name][dayIdx] !== null) return false
+    if (countResting(shift, dayIdx) >= MAX_REST_PER_SHIFT) return false
+    grid[name][dayIdx] = ASSIGNMENTS.L
+    return true
+  }
+
+  function findRestSpot(name, shift, targetIdx) {
+    const candidates = []
+
+    for (let offset = 0; offset <= 5; offset++) {
+      candidates.push(targetIdx - offset)
+      if (offset > 0) candidates.push(targetIdx + offset)
+    }
+
+    return candidates.find(dayIdx => placeRest(name, shift, dayIdx))
+  }
+
+  function enforceMaxConsecutiveWork(name, shift) {
+    let changed = false
+    let consecutive = 0
+
+    for (let d = 0; d < daysInMonth; d++) {
+      if (grid[name][d] === ASSIGNMENTS.L) {
+        consecutive = 0
+        continue
+      }
+
+      consecutive++
+
+      if (consecutive > 5) {
+        let placed = false
+        for (let search = d; search >= d - 5; search--) {
+          if (placeRest(name, shift, search)) {
+            placed = true
+            changed = true
+            break
+          }
+        }
+
+        if (!placed) {
+          for (let search = d + 1; search < daysInMonth; search++) {
+            if (placeRest(name, shift, search)) {
+              placed = true
+              changed = true
+              break
+            }
+          }
+        }
+
+        consecutive = 0
+      }
+    }
+
+    return changed
+  }
+
+  function hasTooLongWorkStreak(name) {
+    let consecutive = 0
+
+    for (let d = 0; d < daysInMonth; d++) {
+      if (grid[name][d] === ASSIGNMENTS.L) {
+        consecutive = 0
+      } else {
+        consecutive++
+        if (consecutive > 5) return true
+      }
+    }
+
+    return false
+  }
+
+  function isRamRest(name, dayIdx) {
+    return dayIdx + 1 < daysInMonth && grid[name][dayIdx + 1] === ASSIGNMENTS.RAM
+  }
+
+  function balanceRestDays(shift) {
+    let changed = true
+
+    while (changed) {
+      changed = false
+      const sortedByRest = [...shift].sort((a, b) => {
+        const diff = grid[b].filter(v => v === ASSIGNMENTS.L).length - grid[a].filter(v => v === ASSIGNMENTS.L).length
+        if (diff !== 0) return diff
+        return shift.indexOf(a) - shift.indexOf(b)
+      })
+      const maxRest = grid[sortedByRest[0]].filter(v => v === ASSIGNMENTS.L).length
+      const minRest = grid[sortedByRest[sortedByRest.length - 1]].filter(v => v === ASSIGNMENTS.L).length
+
+      if (maxRest - minRest <= 1) return
+
+      for (const name of sortedByRest) {
+        if (grid[name].filter(v => v === ASSIGNMENTS.L).length <= minRest + 1) continue
+
+        for (let d = daysInMonth - 1; d >= 0; d--) {
+          if (grid[name][d] !== ASSIGNMENTS.L || isRamRest(name, d)) continue
+
+          grid[name][d] = null
+          if (!hasTooLongWorkStreak(name)) {
+            changed = true
+            break
+          }
+          grid[name][d] = ASSIGNMENTS.L
+        }
+
+        if (changed) break
+      }
+
+      if (changed) continue
+
+      const lowestRest = [...shift].sort((a, b) => {
+        const diff = grid[a].filter(v => v === ASSIGNMENTS.L).length - grid[b].filter(v => v === ASSIGNMENTS.L).length
+        if (diff !== 0) return diff
+        return shift.indexOf(a) - shift.indexOf(b)
+      })
+
+      for (const name of lowestRest) {
+        if (grid[name].filter(v => v === ASSIGNMENTS.L).length > minRest) continue
+
+        for (let d = 0; d < daysInMonth; d++) {
+          if (placeRest(name, shift, d)) {
+            changed = true
+            break
+          }
+        }
+
+        if (changed) break
+      }
+    }
+  }
+
   // ====== PASO 1: Colocar RAM ======
   const sortedRamDays = [...ramDays].sort((a, b) => a - b)
 
@@ -116,122 +256,44 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
 
   // ====== PASO 3: Colocar descansos (patrón 5-1) ======
   for (const shift of [morningShift, nightShift]) {
-    // Stagger rest days: each person starts their cycle offset
-    for (let personIdx = 0; personIdx < shift.length; personIdx++) {
-      const name = shift[personIdx]
-      let consecutiveWork = 0
-
-      // Calculate initial offset so rest days are staggered
-      // Person 0 rests on day 6, person 1 on day 7, etc.
-      const restOffset = personIdx
-
-      for (let d = 0; d < daysInMonth; d++) {
-        if (grid[name][d] === ASSIGNMENTS.L) {
-          // Already has a rest day (from RAM), reset counter
-          consecutiveWork = 0
-          continue
-        }
-
-        if (grid[name][d] === ASSIGNMENTS.RAM || grid[name][d] === ASSIGNMENTS.PE) {
-          consecutiveWork++
-          continue
-        }
-
-        // Cell is still null — needs assignment
-        consecutiveWork++
-
-        if (consecutiveWork >= 6) {
-          // Must rest now (worked 5, this would be 6th)
-          // Check max rest per shift on this day
-          if (countResting(shift, d) < MAX_REST_PER_SHIFT) {
-            grid[name][d] = ASSIGNMENTS.L
-            consecutiveWork = 0
-          } else {
-            // Try next available day
-            for (let search = d + 1; search < daysInMonth; search++) {
-              if (grid[name][search] === null && countResting(shift, search) < MAX_REST_PER_SHIFT) {
-                grid[name][search] = ASSIGNMENTS.L
-                consecutiveWork = 0
-                break
-              }
-              if (grid[name][search] === ASSIGNMENTS.L) {
-                consecutiveWork = 0
-                break
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Second pass: ensure staggered rest using offset approach
-    // Count current L days per person
-    const lCounts = {}
-    shift.forEach(name => {
-      lCounts[name] = grid[name].filter(v => v === ASSIGNMENTS.L).length
-    })
-
-    // Target ~5-6 rest days for 30-day month
     const targetL = Math.round(daysInMonth / 6)
 
+    // Stagger the initial cycle. People may be mid-cycle at the start of the
+    // month, so the first rest day is spread across days 1-6.
     for (let personIdx = 0; personIdx < shift.length; personIdx++) {
       const name = shift[personIdx]
-      const currentL = lCounts[name]
+      const firstRestIdx = (personIdx + 5) % 6
+
+      for (let d = firstRestIdx; d < daysInMonth; d += 6) {
+        if (grid[name][d] === null && countResting(shift, d) < MAX_REST_PER_SHIFT) {
+          grid[name][d] = ASSIGNMENTS.L
+        }
+      }
+    }
+
+    for (let personIdx = 0; personIdx < shift.length; personIdx++) {
+      const name = shift[personIdx]
+      let currentL = grid[name].filter(v => v === ASSIGNMENTS.L).length
 
       if (currentL < targetL) {
-        // Need more rest days — find good spots
-        let consecutiveWork = 0
-        for (let d = 0; d < daysInMonth; d++) {
-          if (grid[name][d] === ASSIGNMENTS.L) {
-            consecutiveWork = 0
-            continue
-          }
-          consecutiveWork++
-
-          // Place extra rest to maintain stagger pattern
-          if (consecutiveWork >= 5 && grid[name][d] === null) {
-            // Check if not too many people resting this day in same shift
-            if (countResting(shift, d) < MAX_REST_PER_SHIFT) {
-              grid[name][d] = ASSIGNMENTS.L
-              consecutiveWork = 0
-              lCounts[name]++
-              if (lCounts[name] >= targetL) break
-            }
+        const firstRestIdx = (personIdx + 5) % 6
+        for (let d = firstRestIdx; d < daysInMonth && currentL < targetL; d += 6) {
+          if (grid[name][d] !== ASSIGNMENTS.L && findRestSpot(name, shift, d) !== undefined) {
+            currentL++
           }
         }
       }
     }
 
-    // Final enforcement: no more than 5 consecutive work days
-    for (const name of shift) {
-      let consecutive = 0
-      for (let d = 0; d < daysInMonth; d++) {
-        if (grid[name][d] === ASSIGNMENTS.L) {
-          consecutive = 0
-        } else {
-          consecutive++
-          if (consecutive > 5 && grid[name][d] === null) {
-            if (countResting(shift, d) < MAX_REST_PER_SHIFT) {
-              grid[name][d] = ASSIGNMENTS.L
-              consecutive = 0
-            } else {
-              // Find next available day respecting max rest limit
-              for (let search = d + 1; search < daysInMonth; search++) {
-                if (grid[name][search] === null && countResting(shift, search) < MAX_REST_PER_SHIFT) {
-                  grid[name][search] = ASSIGNMENTS.L
-                  consecutive = 0
-                  break
-                }
-                if (grid[name][search] === ASSIGNMENTS.L) {
-                  consecutive = 0
-                  break
-                }
-              }
-            }
-          }
-        }
+    let repaired = true
+    while (repaired) {
+      repaired = false
+      for (const name of shift) {
+        repaired = enforceMaxConsecutiveWork(name, shift) || repaired
       }
     }
+
+    balanceRestDays(shift)
   }
 
   // ====== PASO 4: Llenar áreas ======
@@ -245,39 +307,32 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
 
       if (available.length === 0) continue
 
-      // Sort by area counts for equitable distribution
-      let a3Assigned = 0
-      let a1Assigned = 0
-
-      // A3 first (1 person, only on allowed days)
-      if (!noA3 && available.length > 0) {
-        const a3Candidates = [...available].sort((a, b) => areaCounts[a].A3 - areaCounts[b].A3)
-        const chosen = a3Candidates[0]
-        grid[chosen][d] = ASSIGNMENTS.A3
-        areaCounts[chosen].A3++
-        a3Assigned = 1
-        available.splice(available.indexOf(chosen), 1)
+      const assignArea = (name, area) => {
+        grid[name][d] = ASSIGNMENTS[area]
+        areaCounts[name][area]++
+        available.splice(available.indexOf(name), 1)
       }
 
-      // A1 next (2 people ideally)
-      const a1Target = Math.min(2, available.length)
-      const a1Candidates = [...available].sort((a, b) => areaCounts[a].A1 - areaCounts[b].A1)
-
-      for (let i = 0; i < a1Target; i++) {
-        const chosen = a1Candidates[i]
-        grid[chosen][d] = ASSIGNMENTS.A1
-        areaCounts[chosen].A1++
-        a1Assigned++
+      // A2 has priority: keep at least one person there whenever possible.
+      if (available.length === 1) {
+        assignArea(available[0], 'A2')
+        continue
       }
 
-      // Remove A1 assigned from available
-      const a1Names = a1Candidates.slice(0, a1Target)
-      const remaining = available.filter(n => !a1Names.includes(n))
+      const hasA3Capacity = !noA3 && available.length >= 3
+      if (hasA3Capacity) {
+        assignArea(sortByCount(available, 'A3')[0], 'A3')
+      }
 
-      // A2 gets the rest
-      for (const name of remaining) {
-        grid[name][d] = ASSIGNMENTS.A2
-        areaCounts[name].A2++
+      const a1Target = Math.min(2, Math.max(0, available.length - 1))
+      const a1Candidates = sortByCount(available, 'A1').slice(0, a1Target)
+
+      for (const chosen of a1Candidates) {
+        assignArea(chosen, 'A1')
+      }
+
+      for (const name of [...available]) {
+        assignArea(name, 'A2')
       }
     }
   }
