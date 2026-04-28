@@ -13,6 +13,7 @@ import { ASSIGNMENTS, NO_A3_WEEKDAYS } from './constants'
  */
 export function generateSchedule(year, month, ramDays, morningShift, nightShift, options = {}) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const TARGET_REST_DAYS = 7
 
   // grid[name][dayIndex] = assignment code (0-indexed day)
   const grid = {}
@@ -278,6 +279,90 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
     }
   }
 
+  function getTargetRestAdditionOrder(name, shift) {
+    const days = Array.from({ length: daysInMonth }, (_, idx) => idx)
+
+    return [
+      ...days.filter(dayIdx => isLowWorkday(dayIdx) && grid[name][dayIdx] === null && countResting(shift, dayIdx) === 0),
+      ...days.filter(dayIdx => isLowWorkday(dayIdx) && grid[name][dayIdx] === null && countResting(shift, dayIdx) < MAX_REST_PER_SHIFT),
+      ...days.filter(dayIdx => !isLowWorkday(dayIdx) && grid[name][dayIdx] === null && countResting(shift, dayIdx) < MAX_REST_PER_SHIFT),
+    ].sort((a, b) => {
+      const lowDiff = Number(!isLowWorkday(a)) - Number(!isLowWorkday(b))
+      if (lowDiff !== 0) return lowDiff
+
+      const restDiff = countResting(shift, a) - countResting(shift, b)
+      if (restDiff !== 0) return restDiff
+
+      const aAdjacentRest = grid[name][a - 1] === ASSIGNMENTS.L || grid[name][a + 1] === ASSIGNMENTS.L
+      const bAdjacentRest = grid[name][b - 1] === ASSIGNMENTS.L || grid[name][b + 1] === ASSIGNMENTS.L
+      if (aAdjacentRest !== bAdjacentRest) return Number(aAdjacentRest) - Number(bAdjacentRest)
+
+      return a - b
+    })
+  }
+
+  function fillRestDaysToTarget(shift, targetRestDays) {
+    let changed = true
+
+    while (changed) {
+      changed = false
+
+      const lowestRest = [...shift].sort((a, b) => {
+        const diff = restCountFor(a) - restCountFor(b)
+        if (diff !== 0) return diff
+        return shift.indexOf(a) - shift.indexOf(b)
+      })
+
+      for (const name of lowestRest) {
+        if (restCountFor(name) >= targetRestDays) continue
+
+        for (const dayIdx of getTargetRestAdditionOrder(name, shift)) {
+          if (placeRest(name, shift, dayIdx)) {
+            changed = true
+            break
+          }
+        }
+
+        if (changed) break
+      }
+    }
+  }
+
+  function trimRestDaysToTarget(shift, targetRestDays) {
+    let changed = true
+
+    while (changed) {
+      changed = false
+
+      const highestRest = [...shift].sort((a, b) => {
+        const diff = restCountFor(b) - restCountFor(a)
+        if (diff !== 0) return diff
+        return shift.indexOf(a) - shift.indexOf(b)
+      })
+
+      for (const name of highestRest) {
+        if (restCountFor(name) <= targetRestDays) continue
+
+        for (const dayIdx of getRestRemovalOrder()) {
+          if (!canRemoveRest(name, dayIdx)) continue
+
+          grid[name][dayIdx] = null
+          changed = true
+          break
+        }
+
+        if (changed) break
+      }
+    }
+  }
+
+  function normalizeRestDaysToTarget(shift, targetRestDays) {
+    fillRestDaysToTarget(shift, targetRestDays)
+    trimRestDaysToTarget(shift, targetRestDays)
+    levelRestDaysUsingLowWorkdays(shift)
+    fillRestDaysToTarget(shift, targetRestDays)
+  }
+
   function balanceRestDays(shift) {
     let changed = true
 
@@ -411,7 +496,7 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
 
   // ====== PASO 2: Colocar descansos (patrón 5-1) ======
   for (const shift of [morningShift, nightShift]) {
-    const targetL = Math.round(daysInMonth / 6)
+    const targetL = TARGET_REST_DAYS
 
     // Stagger the initial cycle. People may be mid-cycle at the start of the
     // month, so the first rest day is spread across days 1-6.
@@ -450,8 +535,10 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
 
     balanceRestDays(shift)
     levelRestDaysUsingLowWorkdays(shift)
+    normalizeRestDaysToTarget(shift, targetL)
     normalizeLowWorkdayRests(shift)
     balanceRestDays(shift)
+    normalizeRestDaysToTarget(shift, targetL)
 
     repaired = true
     while (repaired) {
@@ -463,7 +550,9 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
 
     normalizeLowWorkdayRests(shift)
     levelRestDaysUsingLowWorkdays(shift)
+    normalizeRestDaysToTarget(shift, targetL)
     balanceRestDays(shift)
+    normalizeRestDaysToTarget(shift, targetL)
   }
 
   // ====== PASO 3: Llenar áreas ======
