@@ -203,6 +203,81 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
     }
   }
 
+  function getLowWorkdayTargets(name, shift) {
+    const days = Array.from({ length: daysInMonth }, (_, idx) => idx)
+
+    return days
+      .filter(dayIdx => isLowWorkday(dayIdx) && grid[name][dayIdx] === null && countResting(shift, dayIdx) < MAX_REST_PER_SHIFT)
+      .sort((a, b) => {
+        const restDiff = countResting(shift, a) - countResting(shift, b)
+        if (restDiff !== 0) return restDiff
+
+        const aAdjacentRest = grid[name][a - 1] === ASSIGNMENTS.L || grid[name][a + 1] === ASSIGNMENTS.L
+        const bAdjacentRest = grid[name][b - 1] === ASSIGNMENTS.L || grid[name][b + 1] === ASSIGNMENTS.L
+        if (aAdjacentRest !== bAdjacentRest) return Number(aAdjacentRest) - Number(bAdjacentRest)
+
+        return a - b
+      })
+  }
+
+  function moveRestToLowWorkday(fromName, toName, shift) {
+    for (const sourceDay of getRestRemovalOrder()) {
+      if (grid[fromName][sourceDay] !== ASSIGNMENTS.L || isRamRest(fromName, sourceDay)) continue
+
+      for (const targetDay of getLowWorkdayTargets(toName, shift)) {
+        if (targetDay === sourceDay) continue
+
+        grid[fromName][sourceDay] = null
+        const sourceIsValid = !hasTooLongWorkStreak(fromName)
+
+        if (sourceIsValid && placeRest(toName, shift, targetDay)) {
+          return true
+        }
+
+        if (grid[toName][targetDay] === ASSIGNMENTS.L) {
+          grid[toName][targetDay] = null
+        }
+        grid[fromName][sourceDay] = ASSIGNMENTS.L
+      }
+    }
+
+    return false
+  }
+
+  function levelRestDaysUsingLowWorkdays(shift) {
+    let changed = true
+
+    while (changed) {
+      changed = false
+
+      const byMostRest = [...shift].sort((a, b) => {
+        const diff = restCountFor(b) - restCountFor(a)
+        if (diff !== 0) return diff
+        return shift.indexOf(a) - shift.indexOf(b)
+      })
+      const byLeastRest = [...byMostRest].reverse()
+      const maxRest = restCountFor(byMostRest[0])
+      const minRest = restCountFor(byLeastRest[0])
+
+      if (maxRest - minRest <= 1) return
+
+      for (const fromName of byMostRest) {
+        if (restCountFor(fromName) <= minRest + 1) continue
+
+        for (const toName of byLeastRest) {
+          if (restCountFor(toName) > minRest) continue
+
+          if (moveRestToLowWorkday(fromName, toName, shift)) {
+            changed = true
+            break
+          }
+        }
+
+        if (changed) break
+      }
+    }
+  }
+
   function balanceRestDays(shift) {
     let changed = true
 
@@ -374,6 +449,7 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
     }
 
     balanceRestDays(shift)
+    levelRestDaysUsingLowWorkdays(shift)
     normalizeLowWorkdayRests(shift)
     balanceRestDays(shift)
 
@@ -386,6 +462,7 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
     }
 
     normalizeLowWorkdayRests(shift)
+    levelRestDaysUsingLowWorkdays(shift)
     balanceRestDays(shift)
   }
 
