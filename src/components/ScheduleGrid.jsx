@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { ASSIGNMENTS, COLORS, DAY_NAMES, NO_A3_WEEKDAYS } from '../engine/constants'
 
-const ASSIGNMENT_OPTIONS = Object.values(ASSIGNMENTS)
+const MORNING_ASSIGNMENT_OPTIONS = Object.values(ASSIGNMENTS)
+const NIGHT_ASSIGNMENT_OPTIONS = MORNING_ASSIGNMENT_OPTIONS.filter(code => code !== ASSIGNMENTS.A3)
 
 export default function ScheduleGrid({ grid, daysInMonth, year, month, morningShift, nightShift, onCellChange }) {
   const [editingCell, setEditingCell] = useState(null)
@@ -23,7 +24,7 @@ export default function ScheduleGrid({ grid, daysInMonth, year, month, morningSh
     return grid[name]?.filter(v => v === ASSIGNMENTS.L).length || 0
   }
 
-  const renderShift = (shiftLabel, shiftTime, staff) => (
+  const renderShift = (shiftLabel, shiftTime, staff, assignmentOptions) => (
     <>
       <tr>
         <td
@@ -35,17 +36,17 @@ export default function ScheduleGrid({ grid, daysInMonth, year, month, morningSh
           <br />
           <span className="text-xs font-normal text-gray-500">{shiftTime}</span>
         </td>
-        {renderRow(staff[0])}
+        {renderRow(staff[0], assignmentOptions)}
       </tr>
       {staff.slice(1).map(name => (
         <tr key={name}>
-          {renderRow(name)}
+          {renderRow(name, assignmentOptions)}
         </tr>
       ))}
     </>
   )
 
-  const renderRow = (name) => {
+  const renderRow = (name, assignmentOptions) => {
     if (!grid[name]) return null
     return (
       <>
@@ -73,7 +74,7 @@ export default function ScheduleGrid({ grid, daysInMonth, year, month, morningSh
                   onBlur={() => setEditingCell(null)}
                 >
                   <option value="">—</option>
-                  {ASSIGNMENT_OPTIONS.map(opt => (
+                  {assignmentOptions.map(opt => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
@@ -121,11 +122,11 @@ export default function ScheduleGrid({ grid, daysInMonth, year, month, morningSh
             </tr>
           </thead>
           <tbody>
-            {renderShift('MAÑANA', '08:00–15:00', morningShift)}
+            {renderShift('MAÑANA', '08:00–15:00', morningShift, MORNING_ASSIGNMENT_OPTIONS)}
             <tr>
               <td colSpan={daysInMonth + 3} className="h-2 bg-gray-800"></td>
             </tr>
-            {renderShift('NOCHE', '15:30–24:00', nightShift)}
+            {renderShift('NOCHE', '15:30–24:00', nightShift, NIGHT_ASSIGNMENT_OPTIONS)}
           </tbody>
         </table>
       </div>

@@ -324,7 +324,7 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
         continue
       }
 
-      const hasA3Capacity = !noA3 && available.length >= 3
+      const hasA3Capacity = shift === morningShift && !noA3 && available.length >= 3
       if (hasA3Capacity) {
         assignArea(sortByCount(available, 'A3')[0], 'A3')
       }
@@ -402,10 +402,16 @@ function validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekd
     }
   }
 
-  // 4. More than 1 in A3 per shift per day
+  // 4. A3 constraints by shift
   for (let d = 0; d < daysInMonth; d++) {
     for (const [label, shift] of [['Mañana', morningShift], ['Noche', nightShift]]) {
       const a3Count = shift.filter(name => grid[name][d] === ASSIGNMENTS.A3).length
+      if (label === 'Noche' && a3Count > 0) {
+        warnings.push({
+          type: 'error',
+          message: `Turno ${label} día ${d + 1}: A3 no aplica en turno noche`,
+        })
+      }
       if (a3Count > 1) {
         warnings.push({
           type: 'error',
