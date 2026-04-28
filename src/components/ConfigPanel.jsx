@@ -20,10 +20,6 @@ export default function ConfigPanel({ config, onConfigChange, onGenerate }) {
     onConfigChange({ ...config, ramDaysStr: e.target.value })
   }
 
-  const handlePeChange = (e) => {
-    onConfigChange({ ...config, peDaysStr: e.target.value })
-  }
-
   const handleLastRamChange = (shift, value) => {
     const key = shift === 'morning' ? 'lastMorningRam' : 'lastNightRam'
     onConfigChange({ ...config, [key]: value })
@@ -51,7 +47,7 @@ export default function ConfigPanel({ config, onConfigChange, onGenerate }) {
     <div className="bg-white rounded-xl shadow-md p-6 mb-6">
       <h2 className="text-lg font-bold text-gray-800 mb-4">Configuración del Mes</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Mes</label>
           <select
@@ -90,18 +86,6 @@ export default function ConfigPanel({ config, onConfigChange, onGenerate }) {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Días PE <span className="text-gray-400">(separados por coma)</span>
-          </label>
-          <input
-            type="text"
-            value={config.peDaysStr}
-            onChange={handlePeChange}
-            placeholder="3, 10, 17, 24"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 border-t pt-4">

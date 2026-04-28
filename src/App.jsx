@@ -76,7 +76,6 @@ export default function App() {
     month: now.getMonth(),
     year: now.getFullYear(),
     ramDaysStr: '1, 3, 5, 8, 12, 15, 19, 22, 26, 29',
-    peDaysStr: '3, 10, 17, 24',
     morningShift: [...DEFAULT_MORNING_SHIFT],
     nightShift: [...DEFAULT_NIGHT_SHIFT],
     morningRamOrder: [...DEFAULT_RAM_ROTATION.morning],
@@ -96,7 +95,6 @@ export default function App() {
     if (!isSupabaseConfigured) return null
 
     const ramDays = parseDays(recordConfig.ramDaysStr)
-    const peDays = parseDays(recordConfig.peDaysStr)
     const morning = recordConfig.morningShift.filter(n => n.trim())
     const night = recordConfig.nightShift.filter(n => n.trim())
 
@@ -105,7 +103,7 @@ export default function App() {
       month: recordConfig.month,
       status: 'draft',
       ram_days: ramDays,
-      pe_days: peDays,
+      pe_days: [],
       morning_shift: morning,
       night_shift: night,
       ram_rotation: {
@@ -158,7 +156,6 @@ export default function App() {
           setConfig(prev => ({
             ...prev,
             ramDaysStr: formatDays(saved.ram_days),
-            peDaysStr: formatDays(saved.pe_days),
             morningShift: saved.morning_shift?.length ? saved.morning_shift : prev.morningShift,
             nightShift: saved.night_shift?.length ? saved.night_shift : prev.nightShift,
             morningRamOrder: saved.ram_rotation?.morning || prev.morningRamOrder,
@@ -202,7 +199,6 @@ export default function App() {
       setConfig(prev => ({
         ...prev,
         ramDaysStr: formatDays(saved.ram_days),
-        peDaysStr: formatDays(saved.pe_days),
         morningShift: saved.morning_shift?.length ? saved.morning_shift : prev.morningShift,
         nightShift: saved.night_shift?.length ? saved.night_shift : prev.nightShift,
         morningRamOrder: saved.ram_rotation?.morning || prev.morningRamOrder,
@@ -241,7 +237,6 @@ export default function App() {
 
   const handleGenerate = useCallback(async () => {
     const ramDays = parseDays(config.ramDaysStr)
-    const peDays = parseDays(config.peDaysStr)
     const morning = config.morningShift.filter(n => n.trim())
     const night = config.nightShift.filter(n => n.trim())
 
@@ -250,7 +245,7 @@ export default function App() {
       return
     }
 
-    const result = generateSchedule(config.year, config.month, ramDays, peDays, morning, night, {
+    const result = generateSchedule(config.year, config.month, ramDays, morning, night, {
       lastRam: {
         morning: config.lastMorningRam,
         night: config.lastNightRam,
@@ -316,10 +311,9 @@ export default function App() {
   const handleExport = useCallback(() => {
     if (!schedule) return
     const ramDays = parseDays(config.ramDaysStr)
-    const peDays = parseDays(config.peDaysStr)
     const morning = config.morningShift.filter(n => n.trim())
     const night = config.nightShift.filter(n => n.trim())
-    exportToExcel(schedule.grid, schedule.daysInMonth, config.year, config.month, morning, night, ramDays, peDays)
+    exportToExcel(schedule.grid, schedule.daysInMonth, config.year, config.month, morning, night, ramDays)
   }, [schedule, config])
 
   return (

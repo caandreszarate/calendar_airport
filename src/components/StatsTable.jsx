@@ -1,6 +1,6 @@
 import { COLORS } from '../engine/constants'
 
-const CODES = ['RAM', 'PE', 'A1', 'A2', 'A3', 'L']
+const CODES = ['RAM', 'A1', 'A2', 'A3', 'L']
 
 export default function StatsTable({ stats, morningShift, nightShift }) {
   if (!stats || Object.keys(stats).length === 0) return null

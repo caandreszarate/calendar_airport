@@ -1,6 +1,5 @@
 export const ASSIGNMENTS = {
   RAM: 'RAM',
-  PE: 'PE',
   A1: 'A1',
   A2: 'A2',
   A3: 'A3',
@@ -9,7 +8,6 @@ export const ASSIGNMENTS = {
 
 export const COLORS = {
   RAM: { bg: '#dc2626', text: '#ffffff' },
-  PE: { bg: '#7c3aed', text: '#ffffff' },
   A1: { bg: '#2563eb', text: '#ffffff' },
   A2: { bg: '#059669', text: '#ffffff' },
   A3: { bg: '#d97706', text: '#ffffff' },

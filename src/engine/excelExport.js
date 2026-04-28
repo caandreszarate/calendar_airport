@@ -14,7 +14,7 @@ function getFill(code) {
   return { fgColor: { rgb: 'FF' + c.bg.slice(1).toUpperCase() } }
 }
 
-export function exportToExcel(grid, daysInMonth, year, month, morningShift, nightShift, ramDays, peDays) {
+export function exportToExcel(grid, daysInMonth, year, month, morningShift, nightShift, ramDays) {
   const monthName = MONTHS_ES[month]
   const wb = XLSX.utils.book_new()
 
@@ -25,7 +25,7 @@ export function exportToExcel(grid, daysInMonth, year, month, morningShift, nigh
   rows.push([`CRONOGRAMA ${monthName} ${year}`])
 
   // Row 2: Legend
-  rows.push([`RAM = Royal Air Maroc | Días ${peDays.join(', ')}: Punta Europa`])
+  rows.push([`RAM = Royal Air Maroc | Descanso obligatorio el día anterior`])
 
   // Row 3: empty
   rows.push([])
@@ -78,7 +78,6 @@ export function exportToExcel(grid, daysInMonth, year, month, morningShift, nigh
   // Legend
   rows.push(['LEYENDA:'])
   rows.push(['RAM', 'Royal Air Maroc — Requiere descanso el día anterior'])
-  rows.push(['PE', 'Punta Europa — NO requiere descanso previo'])
   rows.push(['A1', 'Área 1'])
   rows.push(['A2', 'Área 2 (prioridad)'])
   rows.push(['A3', 'Área 3 — solo 1 técnico por turno, NO lun/jue/sáb'])

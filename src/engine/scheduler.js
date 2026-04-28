@@ -6,13 +6,12 @@ import { ASSIGNMENTS, NO_A3_WEEKDAYS } from './constants'
  * @param {number} year
  * @param {number} month - 0-indexed (0=Enero)
  * @param {number[]} ramDays - días del mes con vuelo RAM (1-based)
- * @param {number[]} peDays - días del mes con vuelo PE (1-based)
  * @param {string[]} morningShift - nombres turno mañana
  * @param {string[]} nightShift - nombres turno noche
  * @param {{ lastRam?: Object, ramRotation?: Object }} options
  * @returns {{ grid: Object, warnings: Array, lastRamByShift: Object }}
  */
-export function generateSchedule(year, month, ramDays, peDays, morningShift, nightShift, options = {}) {
+export function generateSchedule(year, month, ramDays, morningShift, nightShift, options = {}) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
   // grid[name][dayIndex] = assignment code (0-indexed day)
@@ -20,14 +19,6 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
   const allStaff = [...morningShift, ...nightShift]
   allStaff.forEach(name => {
     grid[name] = new Array(daysInMonth).fill(null)
-  })
-
-  // Track last RAM/PE day per person for fair rotation
-  const lastRam = {}
-  const lastPe = {}
-  allStaff.forEach(name => {
-    lastRam[name] = -Infinity
-    lastPe[name] = -Infinity
   })
 
   // Area counters for equitable rotation
@@ -258,7 +249,6 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
       if (sortedCandidates.length > 0) {
         const chosen = sortedCandidates[0]
         grid[chosen][dayIdx] = ASSIGNMENTS.RAM
-        lastRam[chosen] = dayIdx
         shiftConfig.lastRamName = chosen
 
         // Force L on previous day
@@ -269,30 +259,7 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     }
   }
 
-  // ====== PASO 2: Colocar PE ======
-  const sortedPeDays = [...peDays].sort((a, b) => a - b)
-
-  for (const day of sortedPeDays) {
-    const dayIdx = day - 1
-
-    for (const shift of [morningShift, nightShift]) {
-      const candidates = shift.filter(name => grid[name][dayIdx] === null)
-
-      candidates.sort((a, b) => {
-        const diff = lastPe[a] - lastPe[b]
-        if (diff !== 0) return diff
-        return shift.indexOf(a) - shift.indexOf(b)
-      })
-
-      if (candidates.length > 0) {
-        const chosen = candidates[0]
-        grid[chosen][dayIdx] = ASSIGNMENTS.PE
-        lastPe[chosen] = dayIdx
-      }
-    }
-  }
-
-  // ====== PASO 3: Colocar descansos (patrón 5-1) ======
+  // ====== PASO 2: Colocar descansos (patrón 5-1) ======
   for (const shift of [morningShift, nightShift]) {
     const targetL = Math.round(daysInMonth / 6)
 
@@ -334,13 +301,13 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     balanceRestDays(shift)
   }
 
-  // ====== PASO 4: Llenar áreas ======
+  // ====== PASO 3: Llenar áreas ======
   for (let d = 0; d < daysInMonth; d++) {
     const day = d + 1
     const noA3 = isNoA3Day(day)
 
     for (const shift of [morningShift, nightShift]) {
-      // Get available workers (not L, RAM, PE)
+      // Get available workers (not L or RAM)
       const available = shift.filter(name => grid[name][d] === null)
 
       if (available.length === 0) continue
@@ -375,7 +342,7 @@ export function generateSchedule(year, month, ramDays, peDays, morningShift, nig
     }
   }
 
-  // ====== PASO 5: Validar ======
+  // ====== PASO 4: Validar ======
   const warnings = validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekday)
   const lastRamByShift = {
     morning: ramShiftConfigs.find(config => config.key === 'morning')?.lastRamName || null,
@@ -510,7 +477,7 @@ function validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekd
 export function computeStats(grid, daysInMonth) {
   const stats = {}
   for (const [name, days] of Object.entries(grid)) {
-    stats[name] = { RAM: 0, PE: 0, A1: 0, A2: 0, A3: 0, L: 0 }
+    stats[name] = { RAM: 0, A1: 0, A2: 0, A3: 0, L: 0 }
     for (let d = 0; d < daysInMonth; d++) {
       const val = days[d]
       if (val && stats[name][val] !== undefined) {

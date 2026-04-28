@@ -2,7 +2,6 @@ import { COLORS } from '../engine/constants'
 
 const ITEMS = [
   { code: 'RAM', label: 'Royal Air Maroc' },
-  { code: 'PE', label: 'Punta Europa' },
   { code: 'A1', label: 'Área 1' },
   { code: 'A2', label: 'Área 2 (prioridad)' },
   { code: 'A3', label: 'Área 3' },
