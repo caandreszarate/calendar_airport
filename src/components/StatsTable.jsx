@@ -2,6 +2,12 @@ import { COLORS } from '../engine/constants'
 
 const CODES = ['RAM', 'A1', 'A2', 'A3', 'L']
 
+function getStatTextColor(code) {
+  if (code === 'RAM') return '#854d0e'
+  if (code === 'L') return COLORS.L.bg
+  return '#111827'
+}
+
 export default function StatsTable({ stats, morningShift, nightShift }) {
   if (!stats || Object.keys(stats).length === 0) return null
 
@@ -28,7 +34,7 @@ export default function StatsTable({ stats, morningShift, nightShift }) {
                 <td
                   key={code}
                   className="border border-gray-200 px-2 py-1.5 text-center text-sm font-semibold"
-                  style={{ color: COLORS[code].bg }}
+                  style={{ color: getStatTextColor(code) }}
                 >
                   {s[code] || 0}
                 </td>
@@ -65,7 +71,7 @@ export default function StatsTable({ stats, morningShift, nightShift }) {
                 <th
                   key={code}
                   className="border border-gray-200 px-2 py-2 text-center text-xs font-bold"
-                  style={{ color: COLORS[code].bg }}
+                  style={{ color: getStatTextColor(code) }}
                 >
                   {code}
                 </th>

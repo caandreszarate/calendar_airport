@@ -7,11 +7,11 @@ export const ASSIGNMENTS = {
 }
 
 export const COLORS = {
-  RAM: { bg: '#dc2626', text: '#ffffff' },
-  A1: { bg: '#2563eb', text: '#ffffff' },
-  A2: { bg: '#059669', text: '#ffffff' },
-  A3: { bg: '#d97706', text: '#ffffff' },
-  L: { bg: '#e5e7eb', text: '#374151' },
+  RAM: { bg: '#ffff00', text: '#000000' },
+  A1: { bg: '#ffffff', text: '#000000' },
+  A2: { bg: '#ffffff', text: '#000000' },
+  A3: { bg: '#ffffff', text: '#000000' },
+  L: { bg: '#dc2626', text: '#ffffff' },
 }
 
 export const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB']
