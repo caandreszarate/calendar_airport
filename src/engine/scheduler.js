@@ -329,7 +329,7 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
         assignArea(sortByCount(available, 'A3')[0], 'A3')
       }
 
-      const a1Target = Math.min(2, Math.max(0, available.length - 1))
+      const a1Target = Math.min(2, Math.floor(available.length / 2))
       const a1Candidates = sortByCount(available, 'A1').slice(0, a1Target)
 
       for (const chosen of a1Candidates) {
@@ -431,6 +431,12 @@ function validate(grid, daysInMonth, ramDays, morningShift, nightShift, getWeekd
       }
       if (a2Count === 0) {
         warnings.push({ type: 'error', message: `Turno ${label} día ${d + 1}: nadie en A2` })
+      }
+      if (a1Count > a2Count) {
+        warnings.push({
+          type: 'error',
+          message: `Turno ${label} día ${d + 1}: A1 (${a1Count}) supera A2 (${a2Count})`,
+        })
       }
     }
   }
