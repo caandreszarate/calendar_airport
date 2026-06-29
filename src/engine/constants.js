@@ -49,3 +49,9 @@ export const INITIAL_RAM_CONTINUITY = {
 
 // Días donde NO se atiende A3: lunes (1), jueves (4), sábado (6)
 export const NO_A3_WEEKDAYS = [1, 4, 6]
+
+// Exclusiones temporales de RAM por mes. Clave: `${year}-${monthIndex0}` (mes 0-indexado).
+// Los técnicos listados NO se asignan al vuelo RAM ese mes; el resto de meses siguen normal.
+export const RAM_EXCLUSIONS = {
+  '2026-6': ['Vicente'], // Julio 2026: Vicente no atiende RAM; vuelve en agosto
+}

@@ -8,12 +8,15 @@ import { ASSIGNMENTS, NO_A3_WEEKDAYS } from './constants'
  * @param {number[]} ramDays - días del mes con vuelo RAM (1-based)
  * @param {string[]} morningShift - nombres turno mañana
  * @param {string[]} nightShift - nombres turno noche
- * @param {{ lastRam?: Object, ramRotation?: Object }} options
+ * @param {{ lastRam?: Object, ramRotation?: Object, excludeFromRam?: string[] }} options
  * @returns {{ grid: Object, warnings: Array, lastRamByShift: Object }}
  */
 export function generateSchedule(year, month, ramDays, morningShift, nightShift, options = {}) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const TARGET_REST_DAYS = 7
+
+  // Técnicos excluidos del vuelo RAM este mes (exclusión temporal).
+  const excludeFromRam = new Set(options.excludeFromRam || [])
 
   // grid[name][dayIndex] = assignment code (0-indexed day)
   const grid = {}
@@ -447,13 +450,13 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
     {
       key: 'morning',
       staff: morningShift,
-      rotation: normalizeRamRotation(morningShift, options.ramRotation?.morning),
+      rotation: normalizeRamRotation(morningShift, options.ramRotation?.morning).filter(name => !excludeFromRam.has(name)),
       lastRamName: options.lastRam?.morning || null,
     },
     {
       key: 'night',
       staff: nightShift,
-      rotation: normalizeRamRotation(nightShift, options.ramRotation?.night),
+      rotation: normalizeRamRotation(nightShift, options.ramRotation?.night).filter(name => !excludeFromRam.has(name)),
       lastRamName: options.lastRam?.night || null,
     },
   ]
@@ -470,6 +473,7 @@ export function generateSchedule(year, month, ramDays, morningShift, nightShift,
       // Find candidates: available on RAM day AND on previous day (for L)
       // Also check that placing L on prevIdx won't exceed max rest per shift
       const candidates = shift.filter(name => {
+        if (excludeFromRam.has(name)) return false
         if (grid[name][dayIdx] !== null) return false
         if (prevIdx !== null) {
           if (grid[name][prevIdx] !== null && grid[name][prevIdx] !== ASSIGNMENTS.L) return false

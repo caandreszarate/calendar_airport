@@ -19,6 +19,7 @@ import {
   DEFAULT_NIGHT_SHIFT,
   DEFAULT_RAM_ROTATION,
   INITIAL_RAM_CONTINUITY,
+  RAM_EXCLUSIONS,
 } from './engine/constants'
 
 const RAM_CONTINUITY_STORAGE_KEY = 'calendarAirport.ramContinuity'
@@ -254,6 +255,7 @@ export default function App() {
         morning: config.morningRamOrder,
         night: config.nightRamOrder,
       },
+      excludeFromRam: RAM_EXCLUSIONS[getMonthKey(config.year, config.month)] || [],
     })
     setSchedule(result)
     setStats(computeStats(result.grid, result.daysInMonth))
